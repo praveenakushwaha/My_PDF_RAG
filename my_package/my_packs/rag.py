@@ -1,22 +1,10 @@
-import fitz
-import faiss
-import numpy as np
+import fitz  # PyMuPDF
 import os
-from sentence_transformers import SentenceTransformer
 from huggingface_hub import InferenceClient
 
-# ===========================================
-# Hugging Face API Key
-# ===========================================
-# Best practice: Load from environment variables or configure your token safely
-# HF_TOKEN = os.environ.get("HF_TOKEN", "hf_ryGMsraSDOmqLTkjQIliRyIOmzo***8888")
-# Change this line in rag.py:
+# Pull the environment variable safely
 HF_TOKEN = os.environ.get("HF_TOKEN")
-
 client = InferenceClient(api_key=HF_TOKEN)
-
-# Load Embedding Model
-embedding_model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
 
 def read_pdf(pdf_path):
     doc = fitz.open(pdf_path)
@@ -34,24 +22,24 @@ def split_text(text, chunk_size=500, overlap=100):
         start += chunk_size - overlap
     return chunks
 
-class VectorDB:
+class SimpleServerlessDB:
     def __init__(self, chunks):
         self.chunks = chunks
-        embeddings = embedding_model.encode(chunks, convert_to_numpy=True)
-        embeddings = embeddings.astype("float32")
-        self.index = faiss.IndexFlatL2(embeddings.shape[1])
-        self.index.add(embeddings)
 
     def search(self, question, top_k=3):
-        query = embedding_model.encode([question], convert_to_numpy=True)
-        query = query.astype("float32")
-        distance, index = self.index.search(query, top_k)
+        """
+        Lightweight lookup to find the best matching chunks 
+        without requiring PyTorch or compilation.
+        """
+        words = question.lower().split()
+        scored_chunks = []
+        for chunk in self.chunks:
+            score = sum(1 for word in words if word in chunk.lower())
+            scored_chunks.append((score, chunk))
         
-        result = []
-        for i in index[0]:
-            if i < len(self.chunks):
-                result.append(self.chunks[i])
-        return result
+        # Sort by the highest match count
+        scored_chunks.sort(key=lambda x: x[0], reverse=True)
+        return [chunk for score, chunk in scored_chunks[:top_k]]
 
 def ask_llm(context, question):
     prompt = f"""
@@ -77,15 +65,14 @@ Question:
     except Exception as e:
         return f"ERROR : {e}"
 
-# Global reference for initialization in Flask
 db_instance = None
 
-def initialize_rag(pdf_path="documents/sampleTest.pdf"):
+def initialize_rag(pdf_path):
     global db_instance
     if db_instance is None:
-        print("Initializing RAG System...")
+        print("Initializing Lightweight Serverless RAG...")
         text = read_pdf(pdf_path)
         chunks = split_text(text)
-        db_instance = VectorDB(chunks)
-        print("RAG System Ready.")
+        db_instance = SimpleServerlessDB(chunks)
+        print("System Ready.")
     return db_instance
