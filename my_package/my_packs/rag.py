@@ -9,7 +9,9 @@ from huggingface_hub import InferenceClient
 # Hugging Face API Key
 # ===========================================
 # Best practice: Load from environment variables or configure your token safely
-HF_TOKEN = os.environ.get("HF_TOKEN", "hf_ryGMsraSDOmqLTkjQIliRyIOmzoTDF8888")
+# HF_TOKEN = os.environ.get("HF_TOKEN", "hf_ryGMsraSDOmqLTkjQIliRyIOmzo***8888")
+# Change this line in rag.py:
+HF_TOKEN = os.environ.get("HF_TOKEN")
 
 client = InferenceClient(api_key=HF_TOKEN)
 
